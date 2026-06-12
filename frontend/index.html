@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高炉炉顶温度场实时监控系统</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏭 高炉炉顶温度场实时监控系统</h1>
+            <div class="status-bar">
+                <span id="connection-status" class="status disconnected">● 未连接</span>
+                <span id="fps-display">FPS: 0</span>
+                <span id="frame-count">帧数: 0</span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="visualization-panel">
+                <div class="panel-header">
+                    <h2>炉顶等温线云图</h2>
+                    <div class="controls">
+                        <label>
+                            显示模式:
+                            <select id="display-mode">
+                                <option value="contour">等温线</option>
+                                <option value="heatmap">热力图</option>
+                                <option value="both">等温线+热力图</option>
+                            </select>
+                        </label>
+                        <label>
+                            等温带数:
+                            <input type="range" id="contour-levels" min="5" max="50" value="20">
+                            <span id="levels-value">20</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <svg id="temperature-chart"></svg>
+                    <canvas id="heatmap-canvas" style="display: none;"></canvas>
+                </div>
+                <div class="colorbar-container">
+                    <div id="colorbar"></div>
+                    <div class="temp-labels">
+                        <span id="temp-min">--</span>
+                        <span id="temp-max">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="stats-card">
+                    <h3>📊 实时统计</h3>
+                    <div class="stat-item">
+                        <span class="stat-label">最高温度</span>
+                        <span class="stat-value" id="stat-max">-- °C</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">最低温度</span>
+                        <span class="stat-value" id="stat-min">-- °C</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">平均温度</span>
+                        <span class="stat-value" id="stat-avg">-- °C</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">中心温度</span>
+                        <span class="stat-value" id="stat-center">-- °C</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">边缘温度</span>
+                        <span class="stat-value" id="stat-edge">-- °C</span>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <h3>⚙️ 系统信息</h3>
+                    <div class="info-row">
+                        <span>相机分辨率</span>
+                        <span>128 × 128 px</span>
+                    </div>
+                    <div class="info-row">
+                        <span>位深度</span>
+                        <span>14-bit</span>
+                    </div>
+                    <div class="info-row">
+                        <span>插值网格</span>
+                        <span id="grid-size">256 × 256</span>
+                    </div>
+                    <div class="info-row">
+                        <span>反演方法</span>
+                        <span>普朗克定律</span>
+                    </div>
+                    <div class="info-row">
+                        <span>插值方法</span>
+                        <span>RBF 径向基函数</span>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <h3>🔧 操作控制</h3>
+                    <button id="btn-start-sim" class="btn btn-primary">启动模拟数据</button>
+                    <button id="btn-stop-sim" class="btn btn-secondary">停止模拟</button>
+                    <button id="btn-snapshot" class="btn btn-info">截图保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
