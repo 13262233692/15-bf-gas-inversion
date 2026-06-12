@@ -1,6 +1,8 @@
 import numpy as np
 import os
+from typing import Optional
 from .config import config
+from .computation_pool import compute_pool
 
 
 class TemperatureInversion:
@@ -71,6 +73,36 @@ class TemperatureInversion:
 
         temperature_celsius = temperature - 273.15
         return temperature_celsius.astype(np.float32)
+
+    async def invert_async(
+        self,
+        raw_frame: np.ndarray,
+        method: str = "planck",
+        timeout: Optional[float] = None,
+    ) -> np.ndarray:
+        if raw_frame.shape != (config.CAMERA_HEIGHT, config.CAMERA_WIDTH):
+            raise ValueError(
+                f"Expected frame shape ({config.CAMERA_HEIGHT}, {config.CAMERA_WIDTH}), "
+                f"got {raw_frame.shape}"
+            )
+
+        result = await compute_pool.temperature_inversion(
+            raw_frame,
+            method,
+            self.max_value,
+            self.absorption_coeffs,
+            config.STEFAN_BOLTZMANN_CONSTANT,
+            config.PLANCK_C1,
+            config.PLANCK_C2,
+            config.WAVELENGTH_UM,
+            timeout=timeout,
+        )
+
+        if not result.success:
+            print(f"[TempInversion] Async inversion failed: {result.error}, using local compute")
+            return self.invert(raw_frame, method=method)
+
+        return result.data
 
     def get_absorption_coeffs(self) -> np.ndarray:
         return self.absorption_coeffs.copy()

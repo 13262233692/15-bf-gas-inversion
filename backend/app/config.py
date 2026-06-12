@@ -31,5 +31,12 @@ class Config:
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
 
+    COMPUTE_POOL_WORKERS: int = 4
+    COMPUTE_POOL_MAX_PENDING: int = 8
+    COMPUTE_DEFAULT_TIMEOUT: float = 2.0
+
+    FRAME_QUEUE_MAX_SIZE: int = 3
+    FRAME_PROCESS_TIMEOUT: float = 1.5
+
 
 config = Config()

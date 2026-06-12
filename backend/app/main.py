@@ -15,9 +15,10 @@ from .data_manager import data_manager
 from .tcp_server import tcp_server
 from .temperature_inversion import temp_inversion
 from .rbf_interpolation import rbf_interpolator
+from .computation_pool import compute_pool
 
 
-app = FastAPI(title="高炉红外温度反演系统", version="1.0.0")
+app = FastAPI(title="高炉红外温度反演系统", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,13 +41,16 @@ class InterpolationRequest(BaseModel):
 
 @app.on_event("startup")
 async def startup_event():
+    loop = asyncio.get_running_loop()
+    compute_pool.start(loop)
     asyncio.create_task(tcp_server.start())
-    print("[API] Server starting up...")
+    print("[API] Server starting up with isolated computation pool...")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     await tcp_server.stop()
+    compute_pool.shutdown(wait=False)
     print("[API] Server shutting down...")
 
 
@@ -54,14 +58,21 @@ async def shutdown_event():
 async def health_check():
     return {
         "status": "ok",
+        "version": "2.0.0",
         "tcp_server": "running" if tcp_server._running else "stopped",
+        "compute_pool": compute_pool.get_stats(),
+        "queue": tcp_server.get_queue_stats(),
         "stats": data_manager.get_stats(),
     }
 
 
 @app.get("/api/stats")
 async def get_stats():
-    return data_manager.get_stats()
+    return {
+        "data": data_manager.get_stats(),
+        "queue": tcp_server.get_queue_stats(),
+        "compute_pool": compute_pool.get_stats(),
+    }
 
 
 @app.get("/api/raw-frame")
@@ -116,7 +127,9 @@ async def get_contours(levels: int = 20, use_interpolated: bool = True):
     if temp_data is None:
         raise HTTPException(status_code=404, detail="No temperature data available")
 
-    contours = rbf_interpolator.generate_contours(temp_data, levels=levels)
+    contours = await rbf_interpolator.generate_contours_async(
+        temp_data, levels=levels, timeout=2.0
+    )
     return {"levels": levels, "count": len(contours), "contours": contours}
 
 
@@ -130,7 +143,9 @@ async def invert_temperature(request: InversionRequest):
         raise HTTPException(status_code=400, detail=f"Invalid raw data: {e}")
 
     try:
-        temperature = temp_inversion.invert(raw_array, method=request.method)
+        temperature = await temp_inversion.invert_async(
+            raw_array, method=request.method, timeout=2.0
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -159,7 +174,9 @@ async def interpolate_temperature(request: InterpolationRequest):
         rbf_interpolator._grid_coords = rbf_interpolator._create_grid()
 
     try:
-        interpolated = rbf_interpolator.interpolate(temp_array)
+        interpolated = await rbf_interpolator.interpolate_async(
+            temp_array, timeout=2.0
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Interpolation error: {e}")
     finally:
@@ -186,6 +203,11 @@ async def get_calibration():
     }
 
 
+@app.get("/api/compute-pool/stats")
+async def get_compute_pool_stats():
+    return compute_pool.get_stats()
+
+
 @app.websocket("/ws/stream")
 async def websocket_stream(websocket: WebSocket):
     await websocket.accept()
@@ -200,11 +222,15 @@ async def websocket_stream(websocket: WebSocket):
 
             interp = data_manager.get_interpolated_temp()
             stats = data_manager.get_stats()
+            queue_stats = tcp_server.get_queue_stats()
+            pool_stats = compute_pool.get_stats()
 
             if interp is not None:
                 data = {
                     "type": "temperature",
                     "stats": stats,
+                    "queue": queue_stats,
+                    "compute_pool": pool_stats,
                     "shape": list(interp.shape),
                     "min_temp": float(np.min(interp)),
                     "max_temp": float(np.max(interp)),
@@ -226,4 +252,4 @@ if os.path.exists(frontend_dir):
         index_path = os.path.join(frontend_dir, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)
-        return {"message": "BF Gas Inversion API"}
+        return {"message": "BF Gas Inversion API v2.0"}
