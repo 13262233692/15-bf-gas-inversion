@@ -24,6 +24,7 @@ class DataManager:
         self._raw_frame: Optional[np.ndarray] = None
         self._temperature_frame: Optional[np.ndarray] = None
         self._interpolated_temp: Optional[np.ndarray] = None
+        self._velocity_data: Optional[dict] = None
         self._frame_count: int = 0
         self._last_update: float = 0.0
         self._fps: float = 0.0
@@ -52,6 +53,13 @@ class DataManager:
     def update_interpolated_temp(self, interp_data: np.ndarray):
         with self._data_lock:
             self._interpolated_temp = interp_data.copy()
+
+    def update_velocity_data(self, velocity_data: dict):
+        with self._data_lock:
+            self._velocity_data = {
+                k: (v.copy() if isinstance(v, np.ndarray) else v)
+                for k, v in velocity_data.items()
+            }
             self._notify_listeners()
 
     def get_raw_frame(self) -> Optional[np.ndarray]:
@@ -74,6 +82,15 @@ class DataManager:
                 else None
             )
 
+    def get_velocity_data(self) -> Optional[dict]:
+        with self._data_lock:
+            if self._velocity_data is None:
+                return None
+            return {
+                k: (v.copy() if isinstance(v, np.ndarray) else v)
+                for k, v in self._velocity_data.items()
+            }
+
     def get_stats(self) -> dict:
         with self._data_lock:
             stats = {
@@ -85,6 +102,13 @@ class DataManager:
                 stats["min_temp"] = float(np.min(self._temperature_frame))
                 stats["max_temp"] = float(np.max(self._temperature_frame))
                 stats["avg_temp"] = float(np.mean(self._temperature_frame))
+            if self._velocity_data is not None:
+                stats["min_velocity"] = float(self._velocity_data.get("min_velocity", 0))
+                stats["max_velocity"] = float(self._velocity_data.get("max_velocity", 0))
+                stats["avg_velocity"] = float(self._velocity_data.get("avg_velocity", 0))
+                stats["warning_count"] = int(self._velocity_data.get("warning_count", 0))
+                stats["danger_count"] = int(self._velocity_data.get("danger_count", 0))
+                stats["hotspots"] = self._velocity_data.get("hotspots", [])
             return stats
 
     def add_listener(self, callback: Callable):

@@ -38,5 +38,17 @@ class Config:
     FRAME_QUEUE_MAX_SIZE: int = 3
     FRAME_PROCESS_TIMEOUT: float = 1.5
 
+    FURNACE_INNER_DIAMETER_M: float = 8.0
+    FURNACE_PRESSURE_KPA: float = 250.0
+    TOTAL_GAS_FLOW_M3S: float = 6.5
+    AIR_THERMAL_CONDUCTIVITY: float = 0.05
+    AIR_VISCOSITY: float = 5.5e-5
+    AIR_DENSITY: float = 0.35
+    AIR_PRANDTL: float = 0.68
+    CHARACTERISTIC_LENGTH_M: float = 0.05
+    VELOCITY_WARNING_THRESHOLD: float = 2.8
+    VELOCITY_DANGER_THRESHOLD: float = 3.8
+
+    VELOCITY_COMPUTE_TIMEOUT: float = 1.5
 
 config = Config()

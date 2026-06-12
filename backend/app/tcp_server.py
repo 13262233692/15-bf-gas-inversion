@@ -7,6 +7,7 @@ from .config import config
 from .data_manager import data_manager
 from .temperature_inversion import temp_inversion
 from .rbf_interpolation import rbf_interpolator
+from .gas_velocity import gas_velocity_estimator
 
 
 class FrameProcessingQueue:
@@ -82,6 +83,12 @@ class FrameProcessingQueue:
             temp_frame, timeout=timeout
         )
         data_manager.update_interpolated_temp(interp_frame)
+
+        vel_timeout = config.VELOCITY_COMPUTE_TIMEOUT
+        velocity_data = await gas_velocity_estimator.estimate_velocity_async(
+            interp_frame, timeout=vel_timeout
+        )
+        data_manager.update_velocity_data(velocity_data)
 
     def get_stats(self) -> dict:
         return {

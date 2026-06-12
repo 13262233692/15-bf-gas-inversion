@@ -3,33 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高炉炉顶温度场实时监控系统</title>
+    <title>高炉炉顶温度场 · 煤气流速诊断系统</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>🏭 高炉炉顶温度场实时监控系统</h1>
+            <h1>🏭 高炉炉顶温度场 · 煤气流速诊断系统 v2.5</h1>
             <div class="status-bar">
                 <span id="connection-status" class="status disconnected">● 未连接</span>
                 <span id="fps-display">FPS: 0</span>
                 <span id="frame-count">帧数: 0</span>
+                <span id="flow-status" class="flow-normal">● 流速正常</span>
             </div>
         </header>
 
         <div class="main-content">
             <div class="visualization-panel">
                 <div class="panel-header">
-                    <h2>炉顶等温线云图</h2>
+                    <h2>炉顶等温线云图 · 煤气流动粒子</h2>
                     <div class="controls">
                         <label>
                             显示模式:
                             <select id="display-mode">
-                                <option value="contour">等温线</option>
                                 <option value="heatmap">热力图</option>
-                                <option value="both">等温线+热力图</option>
+                                <option value="contour">等温线</option>
+                                <option value="both" selected>等温线+热力图</option>
+                                <option value="particles">流动粒子</option>
+                                <option value="velocity-heat">流速热力</option>
+                                <option value="full">全量叠加</option>
                             </select>
+                        </label>
+                        <label>
+                            粒子密度:
+                            <input type="range" id="particle-density" min="200" max="4000" step="200" value="1500">
+                            <span id="density-value">1500</span>
                         </label>
                         <label>
                             等温带数:
@@ -38,22 +47,68 @@
                         </label>
                     </div>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container" id="chart-container">
+                    <canvas id="heatmap-canvas"></canvas>
+                    <canvas id="velocity-canvas"></canvas>
+                    <canvas id="particles-canvas"></canvas>
                     <svg id="temperature-chart"></svg>
-                    <canvas id="heatmap-canvas" style="display: none;"></canvas>
+                    <div class="warning-overlay" id="warning-overlay" style="display:none;">
+                        <div class="warning-pulse"></div>
+                    </div>
                 </div>
-                <div class="colorbar-container">
-                    <div id="colorbar"></div>
-                    <div class="temp-labels">
-                        <span id="temp-min">--</span>
-                        <span id="temp-max">--</span>
+                <div class="colorbar-row">
+                    <div class="colorbar-group">
+                        <div class="colorbar-title">温度 (°C)</div>
+                        <div id="colorbar"></div>
+                        <div class="temp-labels">
+                            <span id="temp-min">--</span>
+                            <span id="temp-max">--</span>
+                        </div>
+                    </div>
+                    <div class="colorbar-group">
+                        <div class="colorbar-title">煤气流速 (m/s)</div>
+                        <div id="velocity-colorbar"></div>
+                        <div class="temp-labels">
+                            <span id="vel-min">--</span>
+                            <span id="vel-warn" class="warn">⚠ 2.8</span>
+                            <span id="vel-danger" class="danger">⚡ 3.8</span>
+                            <span id="vel-max">--</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="info-panel">
+                <div id="warning-alert-card" class="warning-alert" style="display:none;">
+                    <div class="warning-header">
+                        <span id="warning-icon">⚠️</span>
+                        <strong id="warning-title">局部管道冲刷风险预警</strong>
+                    </div>
+                    <div class="warning-body">
+                        <div id="warning-description">检测到局部区域煤气流速异常偏高</div>
+                        <div class="warning-metrics">
+                            <div class="warn-metric">
+                                <span class="metric-label">最大流速</span>
+                                <span class="metric-value danger" id="warn-max-vel">-- m/s</span>
+                            </div>
+                            <div class="warn-metric">
+                                <span class="metric-label">危险区域</span>
+                                <span class="metric-value danger" id="warn-danger-areas">--</span>
+                            </div>
+                            <div class="warn-metric">
+                                <span class="metric-label">预警区域</span>
+                                <span class="metric-value warn" id="warn-warning-areas">--</span>
+                            </div>
+                        </div>
+                        <div id="hotspot-list" class="hotspot-list"></div>
+                        <div class="warning-recommendation">
+                            💡 建议：立即检查布料偏析情况，调整炉顶布料矩阵或降低顶压
+                        </div>
+                    </div>
+                </div>
+
                 <div class="stats-card">
-                    <h3>📊 实时统计</h3>
+                    <h3>📊 温度场统计</h3>
                     <div class="stat-item">
                         <span class="stat-label">最高温度</span>
                         <span class="stat-value" id="stat-max">-- °C</span>
@@ -76,15 +131,43 @@
                     </div>
                 </div>
 
+                <div class="stats-card velocity-stats">
+                    <h3>🌬️ 流速场诊断</h3>
+                    <div class="stat-item">
+                        <span class="stat-label">最大流速</span>
+                        <span class="stat-value" id="vel-stat-max">-- m/s</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">平均流速</span>
+                        <span class="stat-value" id="vel-stat-avg">-- m/s</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">最小流速</span>
+                        <span class="stat-value" id="vel-stat-min">-- m/s</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">总风量</span>
+                        <span class="stat-value" id="vel-stat-flow">-- m³/s</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">危险单元</span>
+                        <span class="stat-value danger" id="vel-stat-danger">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">预警单元</span>
+                        <span class="stat-value warn" id="vel-stat-warn">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">流速状态</span>
+                        <span class="status-badge normal" id="vel-stat-status">正常</span>
+                    </div>
+                </div>
+
                 <div class="info-card">
                     <h3>⚙️ 系统信息</h3>
                     <div class="info-row">
                         <span>相机分辨率</span>
                         <span>128 × 128 px</span>
-                    </div>
-                    <div class="info-row">
-                        <span>位深度</span>
-                        <span>14-bit</span>
                     </div>
                     <div class="info-row">
                         <span>插值网格</span>
@@ -95,8 +178,16 @@
                         <span>普朗克定律</span>
                     </div>
                     <div class="info-row">
-                        <span>插值方法</span>
-                        <span>RBF 径向基函数</span>
+                        <span>空间插值</span>
+                        <span>KDTree-RBF 快速近似</span>
+                    </div>
+                    <div class="info-row">
+                        <span>流速反演</span>
+                        <span>对流换热 + 连续性方程</span>
+                    </div>
+                    <div class="info-row">
+                        <span>计算架构</span>
+                        <span class="ok">多进程物理隔离</span>
                     </div>
                 </div>
 
@@ -104,6 +195,7 @@
                     <h3>🔧 操作控制</h3>
                     <button id="btn-start-sim" class="btn btn-primary">启动模拟数据</button>
                     <button id="btn-stop-sim" class="btn btn-secondary">停止模拟</button>
+                    <button id="btn-trigger-channeling" class="btn btn-danger">触发管道冲刷模拟</button>
                     <button id="btn-snapshot" class="btn btn-info">截图保存</button>
                 </div>
             </div>
